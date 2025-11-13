@@ -10,7 +10,7 @@ UPBIT_WALLET_ADDRESS = "TVreyZvJWKmcpJGioTzJ81T1JMSXMZ3pV9"
 TRONSCAN_API_BASE = "https://apilist.tronscan.org/api"
 UPBIT_API_BASE = "https://api.upbit.com/v1"
 BINANCE_API_BASE = "https://api.binance.com/api/v3"
-EXCHANGE_RATE_API = "https://api.exchangerate-api.com/v4/latest/USD"
+# Exchange rates fetched from Yahoo Finance via yfinance (KRW=X ticker)
 
 # Analysis Period (6 months)
 # Note: TronScan API may limit historical data access

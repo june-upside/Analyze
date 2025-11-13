@@ -26,6 +26,7 @@ pip install -r requirements.txt
 - matplotlib & seaborn: 기본 차트
 - plotly: 인터랙티브 차트
 - scipy/numpy: 통계 분석
+- yfinance: 환율 데이터 (Yahoo Finance)
 
 ## 사용 방법
 
@@ -165,7 +166,10 @@ Premium = (업비트 USDT-KRW 가격 - 환율) / 환율 × 100
 ### 가격 및 환율 데이터
 - **업비트 API**: https://api.upbit.com/v1
 - **바이낸스 API**: https://api.binance.com/api/v3
-- **환율 API**: https://api.exchangerate-api.com/v4
+- **환율 데이터**: Yahoo Finance (yfinance 라이브러리)
+  - ✅ 실제 과거 환율 데이터 (USD/KRW)
+  - ✅ API 키 불필요
+  - ✅ 일별 데이터를 시간별로 확장
 
 ## 주의사항
 

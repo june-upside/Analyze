@@ -1,14 +1,18 @@
 """
-Exchange rate data collector for USD/KRW conversion
+Exchange rate data collector for USD/KRW conversion using Yahoo Finance
 """
-import requests
 import pandas as pd
 import os
 from datetime import datetime, timedelta
-from typing import Dict
+
+try:
+    import yfinance as yf
+    YFINANCE_AVAILABLE = True
+except ImportError:
+    YFINANCE_AVAILABLE = False
+    print("Warning: yfinance not installed. Install with: pip install yfinance")
 
 from config import (
-    EXCHANGE_RATE_API,
     DATA_DIR,
     START_DATE,
     END_DATE
@@ -16,47 +20,87 @@ from config import (
 
 
 class ExchangeRateCollector:
-    """Collects USD/KRW exchange rate data"""
+    """Collects USD/KRW exchange rate data from Yahoo Finance"""
     
     def __init__(self):
-        self.api_url = EXCHANGE_RATE_API
+        self.ticker = "KRW=X"  # Yahoo Finance ticker for USD/KRW
         
-    def fetch_current_rate(self) -> float:
+    def fetch_historical_rates(self, start_date: datetime, end_date: datetime) -> pd.DataFrame:
         """
-        Fetch current USD to KRW exchange rate
-        
-        Returns:
-            Exchange rate (KRW per USD)
-        """
-        try:
-            response = requests.get(self.api_url, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-            
-            # The API returns rates with USD as base
-            # We need KRW per USD
-            if "rates" in data and "KRW" in data["rates"]:
-                return data["rates"]["KRW"]
-            else:
-                print("Warning: KRW rate not found in API response")
-                return 1300.0  # Fallback approximate rate
-                
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching exchange rate: {e}")
-            return 1300.0  # Fallback approximate rate
-    
-    def generate_hourly_rates(self, daily_rate: float, 
-                             start_date: datetime, 
-                             end_date: datetime) -> pd.DataFrame:
-        """
-        Generate hourly exchange rates by interpolating daily rate
-        
-        Since we typically only have daily exchange rates, we'll use the same
-        rate for all hours in a day. In a production system, you'd want to
-        fetch actual historical rates from a financial data provider.
+        Fetch historical USD/KRW exchange rates from Yahoo Finance
         
         Args:
-            daily_rate: The exchange rate to use
+            start_date: Start date
+            end_date: End date
+            
+        Returns:
+            DataFrame with daily exchange rates
+        """
+        if not YFINANCE_AVAILABLE:
+            print("Error: yfinance not available. Using fallback rate.")
+            return self.generate_fallback_rates(start_date, end_date)
+        
+        try:
+            print(f"Fetching USD/KRW rates from Yahoo Finance ({start_date.date()} to {end_date.date()})...")
+            
+            # Download data from Yahoo Finance
+            forex_data = yf.download(
+                self.ticker,
+                start=start_date.strftime("%Y-%m-%d"),
+                end=(end_date + timedelta(days=1)).strftime("%Y-%m-%d"),  # Include end date
+                progress=False
+            )
+            
+            if forex_data.empty:
+                print("Warning: No data received from Yahoo Finance. Using fallback.")
+                return self.generate_fallback_rates(start_date, end_date)
+            
+            # Process the data
+            df = pd.DataFrame({
+                "date": forex_data.index,
+                "rate": forex_data["Close"].values
+            })
+            
+            # Reset index and convert to datetime
+            df = df.reset_index(drop=True)
+            df["date"] = pd.to_datetime(df["date"])
+            
+            print(f"  Fetched {len(df)} daily rates")
+            print(f"  Rate range: {df['rate'].min():.2f} - {df['rate'].max():.2f} KRW/USD")
+            
+            return df
+            
+        except Exception as e:
+            print(f"Error fetching exchange rates from Yahoo Finance: {e}")
+            print("Using fallback rate...")
+            return self.generate_fallback_rates(start_date, end_date)
+    
+    def generate_fallback_rates(self, start_date: datetime, end_date: datetime) -> pd.DataFrame:
+        """
+        Generate fallback rates if Yahoo Finance fails
+        
+        Args:
+            start_date: Start date
+            end_date: End date
+            
+        Returns:
+            DataFrame with approximate rates
+        """
+        dates = pd.date_range(start=start_date, end=end_date, freq='D')
+        df = pd.DataFrame({
+            "date": dates,
+            "rate": 1350.0  # Approximate average rate
+        })
+        return df
+    
+    def expand_to_hourly(self, daily_df: pd.DataFrame, 
+                        start_date: datetime, 
+                        end_date: datetime) -> pd.DataFrame:
+        """
+        Expand daily exchange rates to hourly by forward-filling
+        
+        Args:
+            daily_df: DataFrame with daily rates
             start_date: Start date
             end_date: End date
             
@@ -64,21 +108,27 @@ class ExchangeRateCollector:
             DataFrame with hourly rates
         """
         # Generate hourly timestamps
-        hours = []
-        current = start_date.replace(minute=0, second=0, microsecond=0)
+        hourly_timestamps = pd.date_range(
+            start=start_date.replace(hour=0, minute=0, second=0, microsecond=0),
+            end=end_date,
+            freq='H'
+        )
         
-        while current <= end_date:
-            hours.append(current)
-            current += timedelta(hours=1)
+        # Create hourly dataframe
+        hourly_df = pd.DataFrame({"timestamp": hourly_timestamps})
+        hourly_df["date"] = hourly_df["timestamp"].dt.date
         
-        # For simplicity, use the current rate for all historical data
-        # In production, you'd fetch actual historical rates
-        df = pd.DataFrame({
-            "timestamp": hours,
-            "rate": daily_rate
-        })
+        # Merge with daily rates
+        daily_df["date"] = pd.to_datetime(daily_df["date"]).dt.date
+        hourly_df = hourly_df.merge(daily_df[["date", "rate"]], on="date", how="left")
         
-        return df
+        # Forward fill missing values
+        hourly_df["rate"] = hourly_df["rate"].ffill().bfill()
+        
+        # Drop the date column
+        hourly_df = hourly_df[["timestamp", "rate"]]
+        
+        return hourly_df
     
     def collect(self) -> pd.DataFrame:
         """
@@ -87,62 +137,23 @@ class ExchangeRateCollector:
         Returns:
             DataFrame with hourly exchange rates
         """
-        print("Fetching USD/KRW exchange rate...")
+        print("Collecting USD/KRW exchange rates from Yahoo Finance...")
         
-        # Get current rate
-        current_rate = self.fetch_current_rate()
-        print(f"Current USD/KRW rate: {current_rate:.2f}")
+        # Fetch historical daily rates
+        daily_df = self.fetch_historical_rates(START_DATE, END_DATE)
         
-        # Generate hourly data
-        # Note: This uses current rate for all historical data
-        # For better accuracy, integrate with a historical exchange rate API
-        df = self.generate_hourly_rates(current_rate, START_DATE, END_DATE)
+        # Expand to hourly
+        hourly_df = self.expand_to_hourly(daily_df, START_DATE, END_DATE)
         
-        print(f"Generated {len(df)} hourly exchange rate records")
+        print(f"Generated {len(hourly_df)} hourly exchange rate records")
         
         # Save to CSV
         output_file = os.path.join(DATA_DIR, "exchange_rates_hourly.csv")
-        df.to_csv(output_file, index=False)
+        hourly_df.to_csv(output_file, index=False)
         print(f"Saved exchange rate data to {output_file}")
         
-        return df
+        return hourly_df
     
-    def fetch_historical_rates_alternative(self) -> pd.DataFrame:
-        """
-        Alternative method using a mock/estimated historical rate
-        This provides a more realistic varying exchange rate
-        
-        Returns:
-            DataFrame with estimated historical rates
-        """
-        print("Generating estimated historical exchange rates...")
-        
-        # Generate timestamps
-        hours = []
-        current = START_DATE.replace(minute=0, second=0, microsecond=0)
-        
-        while current <= END_DATE:
-            hours.append(current)
-            current += timedelta(hours=1)
-        
-        # Create synthetic rate with some variation
-        # Base rate around 1300 with small fluctuations
-        import numpy as np
-        np.random.seed(42)  # For reproducibility
-        
-        base_rate = 1300
-        variation = np.random.normal(0, 10, len(hours))  # Small daily variations
-        rates = base_rate + variation.cumsum() / 10  # Cumulative for trending
-        
-        # Keep rates in realistic range (1250-1350)
-        rates = np.clip(rates, 1250, 1350)
-        
-        df = pd.DataFrame({
-            "timestamp": hours,
-            "rate": rates
-        })
-        
-        return df
 
 
 if __name__ == "__main__":
