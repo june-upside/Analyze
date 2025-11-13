@@ -11,6 +11,7 @@ import argparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from data_collection.tron_wallet import TronWalletCollector
+from data_collection.bitquery_wallet import BitqueryWalletCollector
 from data_collection.upbit_prices import UpbitPriceCollector
 from data_collection.binance_prices import BinancePriceCollector
 from data_collection.exchange_rates import ExchangeRateCollector
@@ -27,12 +28,13 @@ def print_header(text: str):
     print("="*70 + "\n")
 
 
-def collect_data(use_cache: bool = True):
+def collect_data(use_cache: bool = True, use_bitquery: bool = False):
     """
     Step 1: Collect all data from APIs
     
     Args:
         use_cache: Whether to use cached data if available
+        use_bitquery: Whether to use Bitquery GraphQL API instead of TronScan
     """
     print_header("STEP 1: DATA COLLECTION")
     
@@ -42,9 +44,26 @@ def collect_data(use_cache: bool = True):
     # Collect Tron wallet data
     print("1. Collecting Upbit Hot Wallet Transfer Data...")
     print("-" * 70)
-    from config import MAX_TRON_RECORDS
-    wallet_collector = TronWalletCollector()
-    wallet_data = wallet_collector.collect(use_cache=use_cache, max_records=MAX_TRON_RECORDS)
+    
+    if use_bitquery:
+        print("Using Bitquery GraphQL API (better for historical data)")
+        bitquery_key = os.environ.get("BITQUERY_API_KEY")
+        if not bitquery_key:
+            print("⚠️  Warning: BITQUERY_API_KEY environment variable not set!")
+            print("   Get free API key at: https://bitquery.io/")
+            print("   Set it with: export BITQUERY_API_KEY='your_key'")
+            print("\nFalling back to TronScan API...")
+            use_bitquery = False
+    
+    if use_bitquery:
+        wallet_collector = BitqueryWalletCollector()
+        wallet_data = wallet_collector.collect(use_cache=use_cache)
+    else:
+        print("Using TronScan API (limited historical data)")
+        from config import MAX_TRON_RECORDS
+        wallet_collector = TronWalletCollector()
+        wallet_data = wallet_collector.collect(use_cache=use_cache, max_records=MAX_TRON_RECORDS)
+    
     print(f"✓ Wallet data collected: {len(wallet_data)} hourly records")
     if len(wallet_data) > 0:
         print(f"  Date range: {wallet_data['timestamp'].min()} to {wallet_data['timestamp'].max()}")
@@ -188,6 +207,11 @@ def main():
         action="store_true",
         help="Only generate visualizations (requires existing analysis)"
     )
+    parser.add_argument(
+        "--use-bitquery",
+        action="store_true",
+        help="Use Bitquery GraphQL API for better historical data (requires API key)"
+    )
     
     args = parser.parse_args()
     
@@ -209,10 +233,10 @@ def main():
                 return 1
             generate_visualizations()
         elif args.collect_only:
-            collect_data(use_cache=not args.no_cache)
+            collect_data(use_cache=not args.no_cache, use_bitquery=args.use_bitquery)
         else:
             # Full workflow
-            collect_data(use_cache=not args.no_cache)
+            collect_data(use_cache=not args.no_cache, use_bitquery=args.use_bitquery)
             if not calculate_premiums():
                 return 1
             if not analyze_correlations():

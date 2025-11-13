@@ -29,26 +29,38 @@ pip install -r requirements.txt
 
 ## 사용 방법
 
-### 전체 분석 실행
+### 방법 1: Bitquery GraphQL API (권장 - 6개월 데이터)
+
+Bitquery는 과거 데이터를 충분히 제공합니다!
+
+```bash
+# 1. Bitquery에서 무료 API 키 받기
+# https://bitquery.io/ 에서 회원가입 후 API 키 발급
+
+# 2. API 키 설정
+export BITQUERY_API_KEY='your_api_key_here'
+
+# 3. Bitquery로 데이터 수집 및 분석
+python main.py --use-bitquery
+```
+
+### 방법 2: TronScan API (제한적 - 1-2주 데이터)
 
 ```bash
 python main.py
 ```
 
-이 명령은 다음을 순차적으로 실행합니다:
-1. 데이터 수집 (TronScan, 업비트, 바이낸스, 환율)
-2. 김치프리미엄 계산
-3. 상관관계 분석
-4. 차트 생성
-
-### 옵션
+### 주요 옵션
 
 ```bash
+# Bitquery 사용 (6개월 데이터)
+python main.py --use-bitquery
+
 # 캐시 무시하고 새로 데이터 수집
 python main.py --no-cache
 
 # 데이터 수집만 실행
-python main.py --collect-only
+python main.py --collect-only --use-bitquery
 
 # 분석만 실행 (데이터가 이미 있을 때)
 python main.py --analyze-only
@@ -56,6 +68,14 @@ python main.py --analyze-only
 # 시각화만 실행 (분석 결과가 이미 있을 때)
 python main.py --visualize-only
 ```
+
+### 워크플로우
+
+전체 분석은 다음을 순차적으로 실행합니다:
+1. 데이터 수집 (Bitquery/TronScan, 업비트, 바이낸스, 환율)
+2. 김치프리미엄 계산
+3. 상관관계 분석
+4. 차트 생성
 
 ## 프로젝트 구조
 
@@ -133,7 +153,16 @@ Premium = (업비트 USDT-KRW 가격 - 환율) / 환율 × 100
 
 ## 데이터 소스
 
+### 핫월렛 데이터 (선택 가능)
+- **Bitquery GraphQL API** (권장): https://bitquery.io/
+  - ✅ 6개월 이상 과거 데이터
+  - ✅ GraphQL로 효율적 쿼리
+  - 🔑 무료 API 키 필요
 - **TronScan API**: https://apilist.tronscan.org/api
+  - ⚠️ 최근 1-2주 데이터만
+  - ✅ API 키 불필요
+
+### 가격 및 환율 데이터
 - **업비트 API**: https://api.upbit.com/v1
 - **바이낸스 API**: https://api.binance.com/api/v3
 - **환율 API**: https://api.exchangerate-api.com/v4
