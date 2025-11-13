@@ -89,15 +89,32 @@ class ChartGenerator:
         # Create figure with secondary y-axis
         fig = make_subplots(specs=[[{"secondary_y": True}]])
         
-        # Add bar chart for net flow
+        # Add line chart for inflow (입금)
         fig.add_trace(
-            go.Bar(
+            go.Scatter(
                 x=df["timestamp"],
-                y=df["net_flow"],
-                name="Net Flow (USDT)",
-                marker_color=df["net_flow"].apply(lambda x: "green" if x > 0 else "red"),
-                opacity=0.6,
-                hovertemplate="<b>%{x}</b><br>Net Flow: %{y:,.0f} USDT<extra></extra>"
+                y=df["inflow"],
+                name="입금 (Inflow)",
+                mode="lines",
+                line=dict(color="rgba(0, 200, 0, 0.8)", width=2),
+                fill='tozeroy',
+                fillcolor='rgba(0, 200, 0, 0.15)',
+                hovertemplate="<b>%{x}</b><br>입금: %{y:,.0f} USDT<extra></extra>"
+            ),
+            secondary_y=False
+        )
+        
+        # Add line chart for outflow (출금)
+        fig.add_trace(
+            go.Scatter(
+                x=df["timestamp"],
+                y=df["outflow"],
+                name="출금 (Outflow)",
+                mode="lines",
+                line=dict(color="rgba(255, 0, 0, 0.8)", width=2),
+                fill='tozeroy',
+                fillcolor='rgba(255, 0, 0, 0.15)',
+                hovertemplate="<b>%{x}</b><br>출금: %{y:,.0f} USDT<extra></extra>"
             ),
             secondary_y=False
         )
@@ -142,7 +159,7 @@ class ChartGenerator:
         
         # Update axes
         fig.update_xaxes(title_text="Date")
-        fig.update_yaxes(title_text="Net Flow (USDT)", secondary_y=False)
+        fig.update_yaxes(title_text="입출금량 (USDT)", secondary_y=False)
         fig.update_yaxes(title_text="Premium (%)", secondary_y=True)
         
         # Save as HTML
@@ -164,11 +181,16 @@ class ChartGenerator:
         
         fig, ax1 = plt.subplots(figsize=(16, 8))
         
-        # Plot net flow as bars
-        colors = ['green' if x > 0 else 'red' for x in df["net_flow"]]
-        ax1.bar(df["timestamp"], df["net_flow"], alpha=0.6, color=colors, label="Net Flow")
+        # Plot inflow (입금) as area chart
+        ax1.plot(df["timestamp"], df["inflow"], color='green', linewidth=2, label="입금 (Inflow)", alpha=0.8)
+        ax1.fill_between(df["timestamp"], df["inflow"], 0, color='green', alpha=0.2, interpolate=True)
+        
+        # Plot outflow (출금) as area chart
+        ax1.plot(df["timestamp"], df["outflow"], color='red', linewidth=2, label="출금 (Outflow)", alpha=0.8)
+        ax1.fill_between(df["timestamp"], df["outflow"], 0, color='red', alpha=0.2, interpolate=True)
+        
         ax1.set_xlabel("Date", fontsize=12)
-        ax1.set_ylabel("Net Flow (USDT)", fontsize=12, color="black")
+        ax1.set_ylabel("입출금량 (USDT)", fontsize=12, color="black")
         ax1.tick_params(axis='y', labelcolor="black")
         ax1.grid(True, alpha=0.3)
         
